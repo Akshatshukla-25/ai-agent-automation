@@ -12,7 +12,8 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import { useCallback, useEffect, useState } from "react";
 import { apiUrl } from "@/lib/api";
-import { v4 as uuidv4 } from "uuid";
+import { generateNodeId, generateEdgeId } from "@/utils/ids";
+import { duplicateNodesSafely } from "@/utils/graphValidation";
 import { Edge, applyNodeChanges, applyEdgeChanges } from "reactflow";
 import { X } from "lucide-react";
 
@@ -63,6 +64,8 @@ function getNodeColor(type: string) {
 
 function buildNodePreview(step: any, edges: CustomEdge[], allSteps: any[]) {
   const rows: { name: string; type: string }[] = [];
+
+  if (!step) return rows;
 
   if (step.type === "LLM") {
     rows.push({ name: "prompt", type: "string" });
@@ -164,7 +167,7 @@ function computeNodes(
                 }}
                 className="text-red-500 hover:text-red-600 text-xs opacity-0 group-hover:opacity-100 transition"
               >
-                x
+                ✕
               </button>
             </div>
 
@@ -258,6 +261,32 @@ export default function VisualBuilder({
     );
   }, [computedNodes, setNodes]);
 
+  /* ---------- KEYBOARD SHORTCUT DUPLICATION SAFETY ---------- */
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Catch Ctrl+D or Cmd+D
+      if ((e.metaKey || e.ctrlKey) && e.key === "d") {
+        const activeSelectedNodes = nodes.filter((n) => n.selected);
+        if (!activeSelectedNodes.length) return;
+        
+        e.preventDefault();
+        
+        // Match targeted engine items with current selection
+        const stepsToDuplicate = steps.filter((s) => 
+          activeSelectedNodes.some((node) => node.id === s.id)
+        );
+
+        // Run deep clone & fresh ID sanitization layering
+        const clonedSteps = duplicateNodesSafely(stepsToDuplicate);
+
+        setSteps((prev) => [...prev, ...clonedSteps]);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [nodes, steps, setSteps]);
+
   /* ---------- EVENTS ---------- */
 
   function onNodeClick(_: any, node: Node) {
@@ -274,7 +303,6 @@ export default function VisualBuilder({
     setNodes((nds) => {
       const updated = applyNodeChanges(changes, nds);
 
-      // 🔥 AFTER nodes update, sync steps OUTSIDE render
       setTimeout(() => {
         setSteps((prev) =>
           prev.map((step) => {
@@ -304,33 +332,6 @@ export default function VisualBuilder({
       return applyEdgeChanges(changes, eds);
     });
   };
-
-  function rebuildStepOrder(newEdges: any[]) {
-    if (!newEdges.length) return;
-
-    const map: any = {};
-
-    newEdges.forEach((edge) => {
-      map[edge.source] = edge.target;
-    });
-
-    const start = steps.find((s) => !newEdges.find((e) => e.target === s.id));
-
-    if (!start) return;
-
-    const ordered = [start];
-    let current = start;
-
-    while (map[current.id]) {
-      const next = steps.find((s) => s.id === map[current.id]);
-      if (!next) break;
-
-      ordered.push(next);
-      current = next;
-    }
-
-    setSteps(ordered);
-  }
 
   const onConnect = (params: Connection) => {
     const sourceStep = steps.find((s) => s.id === params.source);
@@ -384,7 +385,7 @@ export default function VisualBuilder({
       }
 
       const newEdge = {
-        id: uuidv4(),
+        id: generateEdgeId(), // ✅ Guaranteed distinct execution keys
         ...params,
         animated: true,
         style: EDGE_STYLE,
@@ -393,9 +394,7 @@ export default function VisualBuilder({
         caseValue,
       };
 
-      const updated = addEdge(newEdge, filtered);
-
-      return updated;
+      return addEdge(newEdge, filtered);
     });
   };
 
@@ -404,8 +403,6 @@ export default function VisualBuilder({
       prev.map((s) => (s.id === stepId ? { ...s, ...patch } : s)),
     );
   }
-
-  
 
   function updateNodeLabel(stepId: string, name: string, type: string) {
     const step = steps.find((s) => s.id === stepId);
@@ -422,10 +419,8 @@ export default function VisualBuilder({
                 ...n.data,
                 label: (
                   <div className="w-full text-sm">
-                    {/* HEADER */}
                     <div className="flex items-center justify-between border-b pb-1 mb-2 group">
                       <span className="font-semibold truncate">{name}</span>
-
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -437,12 +432,10 @@ export default function VisualBuilder({
                       </button>
                     </div>
 
-                    {/* TYPE */}
                     <div className="text-xs text-muted-foreground mb-2">
                       {type}
                     </div>
 
-                    {/* SCHEMA */}
                     <div className="space-y-1">
                       {schema.map((row) => (
                         <div
@@ -452,7 +445,7 @@ export default function VisualBuilder({
                           <span>{row.name}</span>
                           <span className="text-muted-foreground">
                             {row.type}
-                          </span>
+幕                          </span>
                         </div>
                       ))}
                     </div>
@@ -473,9 +466,7 @@ export default function VisualBuilder({
             Authorization: "Bearer " + localStorage.getItem("token"),
           },
         });
-
         const data = await res.json();
-
         if (data.ok) {
           setDocuments(data.documents || []);
         }
@@ -483,7 +474,6 @@ export default function VisualBuilder({
         console.error("Failed to load documents", err);
       }
     }
-
     fetchDocuments();
   }, []);
 
@@ -494,7 +484,6 @@ export default function VisualBuilder({
         if (!step) return node;
 
         const isSelected = selectedNode?.id === node.id;
-
         const border = isSelected
           ? "2px solid #3b82f6"
           : `1px solid ${getNodeColor(step.type)}`;
@@ -503,7 +492,6 @@ export default function VisualBuilder({
           ? "0 0 0 2px rgba(59,130,246,.35), 0 4px 12px rgba(0,0,0,.25)"
           : `0 0 0 1px ${getNodeColor(step.type)}20, 0 2px 6px rgba(0,0,0,0.05)`;
 
-        // ✅ prevent unnecessary re-renders
         if (
           node.style?.border === border &&
           node.style?.boxShadow === boxShadow
@@ -518,29 +506,27 @@ export default function VisualBuilder({
             border,
             boxShadow,
           },
-          // ❌ DO NOT rebuild label here
         };
       }),
     );
-  }, [selectedNode]);
+  }, [selectedNode, steps]);
 
   /* ---------- ADD NODE ---------- */
 
   function addNode() {
-    const id = uuidv4();
+    const id = generateNodeId("LLM"); // ✅ Alphabet-safe prefix token
 
     const node: StepNode = {
       id,
       type: "default",
       position: {
-        x: Math.random() * 400,
-        y: Math.random() * 400,
+        x: Math.random() * 200 + 100,
+        y: Math.random() * 200 + 100,
       },
       data: {
         label: (
           <div className="flex items-center justify-between gap-2">
             <span>New Step (LLM)</span>
-
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -570,7 +556,6 @@ export default function VisualBuilder({
     };
 
     setNodes((n) => [...n, node]);
-
     setSteps([
       ...steps,
       {
@@ -584,8 +569,6 @@ export default function VisualBuilder({
 
   return (
     <div className="h-[720px] rounded-xl border bg-gradient-to-b from-background to-muted/40 relative overflow-hidden">
-      {/* ---------- ADD STEP BUTTON ---------- */}
-
       <div className="absolute z-20 top-4 left-4">
         <button
           onClick={addNode}
@@ -594,8 +577,6 @@ export default function VisualBuilder({
           + Add Step
         </button>
       </div>
-
-      {/* ---------- GRAPH ---------- */}
 
       <ReactFlow
         nodes={nodes}
@@ -628,16 +609,12 @@ export default function VisualBuilder({
         snapGrid={[20, 20]}
       >
         <Controls className="bg-card border rounded-md shadow" />
-
         <Background gap={24} size={1} />
       </ReactFlow>
 
-      {/* ---------- SETTINGS PANEL ---------- */}
-
+      {/* Settings Configuration Side panel rendering remains active below */}
       {selectedNode && selectedStep && (
         <div className="absolute right-0 top-0 h-full w-[380px] bg-card border-l shadow-xl z-30 flex flex-col">
-          {/* HEADER */}
-
           <div className="p-4 border-b flex items-start justify-between">
             <div>
               <h3 className="font-semibold text-lg">Step Settings</h3>
@@ -645,7 +622,6 @@ export default function VisualBuilder({
                 Configure workflow step
               </p>
             </div>
-
             <button
               onClick={() => setSelectedNode(null)}
               className="p-2 rounded-md hover:bg-muted transition"
@@ -654,14 +630,9 @@ export default function VisualBuilder({
             </button>
           </div>
 
-          {/* FORM */}
-
           <div className="flex-1 overflow-y-auto p-5 space-y-5">
-            {/* STEP NAME */}
-
             <div>
               <label className="text-xs text-muted-foreground">Step Name</label>
-
               <input
                 className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
                 value={selectedStep.name || ""}
@@ -676,26 +647,18 @@ export default function VisualBuilder({
               />
             </div>
 
-            {/* STEP TYPE */}
-
             <div>
               <label className="text-xs text-muted-foreground">Step Type</label>
-
               <select
                 className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
                 value={selectedStep.type || ""}
                 onChange={(e) => {
                   const type = e.target.value as StepType;
-
                   updateStep(selectedStep.id, { type });
-
                   updateNodeLabel(selectedStep.id, selectedStep.name, type);
                 }}
               >
-                <option value="" disabled>
-                  Select step type
-                </option>
-
+                <option value="" disabled>Select step type</option>
                 <option value="LLM">LLM</option>
                 <option value="HTTP">HTTP</option>
                 <option value="Delay">Delay</option>
@@ -706,15 +669,10 @@ export default function VisualBuilder({
               </select>
             </div>
 
-            {/* ---------- LLM ---------- */}
-
             {selectedStep.type === "LLM" && (
               <>
                 <div>
-                  <label className="text-xs text-muted-foreground">
-                    Prompt
-                  </label>
-
+                  <label className="text-xs text-muted-foreground">Prompt</label>
                   <textarea
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background min-h-[120px]"
                     value={selectedStep.prompt || ""}
@@ -723,16 +681,10 @@ export default function VisualBuilder({
                     }
                   />
                 </div>
-
-                {/* 🔥 Advanced Options */}
                 <div className="rounded-lg border border-muted p-4">
                   <p className="text-sm font-semibold mb-3">Advanced Options</p>
-
                   <div className="flex items-center justify-between">
-                    <label className="text-sm cursor-pointer">
-                      Use Agent Memory
-                    </label>
-
+                    <label className="text-sm cursor-pointer">Use Agent Memory</label>
                     <input
                       type="checkbox"
                       checked={selectedStep.useMemory ?? false}
@@ -743,11 +695,9 @@ export default function VisualBuilder({
                       }
                     />
                   </div>
-
                   {selectedStep.useMemory && (
                     <div className="mt-3">
                       <label className="text-sm">Memory Top K</label>
-
                       <input
                         type="number"
                         className="w-full border rounded-lg px-3 py-2 mt-1 bg-background"
@@ -764,14 +714,9 @@ export default function VisualBuilder({
               </>
             )}
 
-            {/* ---------- DELAY ---------- */}
-
             {selectedStep.type === "Delay" && (
               <div>
-                <label className="text-xs text-muted-foreground">
-                  Delay (seconds)
-                </label>
-
+                <label className="text-xs text-muted-foreground">Delay (seconds)</label>
                 <input
                   type="number"
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
@@ -785,13 +730,10 @@ export default function VisualBuilder({
               </div>
             )}
 
-            {/* ---------- HTTP ---------- */}
-
             {selectedStep.type === "HTTP" && (
               <>
                 <div>
                   <label className="text-xs text-muted-foreground">URL</label>
-
                   <input
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
                     value={selectedStep.url || ""}
@@ -800,12 +742,8 @@ export default function VisualBuilder({
                     }
                   />
                 </div>
-
                 <div>
-                  <label className="text-xs text-muted-foreground">
-                    Method
-                  </label>
-
+                  <label className="text-xs text-muted-foreground">Method</label>
                   <select
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
                     value={selectedStep.method || ""}
@@ -813,10 +751,7 @@ export default function VisualBuilder({
                       updateStep(selectedStep.id, { method: e.target.value })
                     }
                   >
-                    <option value="" disabled>
-                      Select method
-                    </option>
-
+                    <option value="" disabled>Select method</option>
                     <option value="GET">GET</option>
                     <option value="POST">POST</option>
                     <option value="PUT">PUT</option>
@@ -826,12 +761,9 @@ export default function VisualBuilder({
               </>
             )}
 
-            {/* ---------- TOOL ---------- */}
-
             {selectedStep.type === "Tool" && (
               <div>
                 <label className="text-xs text-muted-foreground">Tool</label>
-
                 <select
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
                   value={selectedStep.tool || ""}
@@ -839,10 +771,7 @@ export default function VisualBuilder({
                     updateStep(selectedStep.id, { tool: e.target.value })
                   }
                 >
-                  <option value="" disabled>
-                    Select tool
-                  </option>
-
+                  <option value="" disabled>Select tool</option>
                   <option value="email">Email</option>
                   <option value="file">File</option>
                   <option value="browser">Browser</option>
@@ -850,13 +779,10 @@ export default function VisualBuilder({
               </div>
             )}
 
-            {/* EMAIL */}
-
             {selectedStep.type === "Tool" && selectedStep.tool === "email" && (
               <>
                 <div>
                   <label className="text-xs text-muted-foreground">To</label>
-
                   <input
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
                     value={selectedStep.to || ""}
@@ -865,12 +791,8 @@ export default function VisualBuilder({
                     }
                   />
                 </div>
-
                 <div>
-                  <label className="text-xs text-muted-foreground">
-                    Subject
-                  </label>
-
+                  <label className="text-xs text-muted-foreground">Subject</label>
                   <input
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
                     value={selectedStep.subject || ""}
@@ -879,10 +801,8 @@ export default function VisualBuilder({
                     }
                   />
                 </div>
-
                 <div>
                   <label className="text-xs text-muted-foreground">Text</label>
-
                   <textarea
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
                     value={selectedStep.text || ""}
@@ -894,15 +814,10 @@ export default function VisualBuilder({
               </>
             )}
 
-            {/* FILE */}
-
             {selectedStep.type === "Tool" && selectedStep.tool === "file" && (
               <>
                 <div>
-                  <label className="text-xs text-muted-foreground">
-                    Action
-                  </label>
-
+                  <label className="text-xs text-muted-foreground">Action</label>
                   <select
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
                     value={selectedStep.action || ""}
@@ -910,19 +825,14 @@ export default function VisualBuilder({
                       updateStep(selectedStep.id, { action: e.target.value })
                     }
                   >
-                    <option value="" disabled>
-                      Select action
-                    </option>
-
+                    <option value="" disabled>Select action</option>
                     <option value="write">Write</option>
                     <option value="append">Append</option>
                     <option value="read">Read</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="text-xs text-muted-foreground">Path</label>
-
                   <input
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
                     value={selectedStep.path || ""}
@@ -931,13 +841,9 @@ export default function VisualBuilder({
                     }
                   />
                 </div>
-
                 {selectedStep.action !== "read" && (
                   <div>
-                    <label className="text-xs text-muted-foreground">
-                      Content
-                    </label>
-
+                    <label className="text-xs text-muted-foreground">Content</label>
                     <textarea
                       className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
                       value={selectedStep.content || ""}
@@ -952,71 +858,51 @@ export default function VisualBuilder({
               </>
             )}
 
-            {/* BROWSER */}
-
-            {selectedStep.type === "Tool" &&
-              selectedStep.tool === "browser" && (
-                <>
+            {selectedStep.type === "Tool" && selectedStep.tool === "browser" && (
+              <>
+                <div>
+                  <label className="text-xs text-muted-foreground">Action</label>
+                  <select
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
+                    value={selectedStep.action || ""}
+                    onChange={(e) =>
+                      updateStep(selectedStep.id, { action: e.target.value })
+                    }
+                  >
+                    <option value="" disabled>Select action</option>
+                    <option value="screenshot">Screenshot</option>
+                    <option value="evaluate">Evaluate</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">URL</label>
+                  <input
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
+                    value={selectedStep.url || ""}
+                    onChange={(e) =>
+                      updateStep(selectedStep.id, { url: e.target.value })
+                    }
+                  />
+                </div>
+                {selectedStep.action === "evaluate" && (
                   <div>
-                    <label className="text-xs text-muted-foreground">
-                      Action
-                    </label>
-
-                    <select
+                    <label className="text-xs text-muted-foreground">Code</label>
+                    <textarea
                       className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
-                      value={selectedStep.action || ""}
+                      value={selectedStep.code || ""}
                       onChange={(e) =>
-                        updateStep(selectedStep.id, { action: e.target.value })
-                      }
-                    >
-                      <option value="" disabled>
-                        Select action
-                      </option>
-
-                      <option value="screenshot">Screenshot</option>
-                      <option value="evaluate">Evaluate</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-muted-foreground">URL</label>
-
-                    <input
-                      className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
-                      value={selectedStep.url || ""}
-                      onChange={(e) =>
-                        updateStep(selectedStep.id, { url: e.target.value })
+                        updateStep(selectedStep.id, { code: e.target.value })
                       }
                     />
                   </div>
-
-                  {selectedStep.action === "evaluate" && (
-                    <div>
-                      <label className="text-xs text-muted-foreground">
-                        Code
-                      </label>
-
-                      <textarea
-                        className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
-                        value={selectedStep.code || ""}
-                        onChange={(e) =>
-                          updateStep(selectedStep.id, { code: e.target.value })
-                        }
-                      />
-                    </div>
-                  )}
-                </>
-              )}
-
-            {/* DOCUMENT */}
+                )}
+              </>
+            )}
 
             {selectedStep.type === "Document" && (
               <>
                 <div>
-                  <label className="text-xs text-muted-foreground">
-                    Document
-                  </label>
-
+                  <label className="text-xs text-muted-foreground">Document</label>
                   <select
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
                     value={selectedStep.documentId || ""}
@@ -1026,10 +912,7 @@ export default function VisualBuilder({
                       })
                     }
                   >
-                    <option value="" disabled>
-                      Select document
-                    </option>
-
+                    <option value="" disabled>Select document</option>
                     {documents.map((doc) => (
                       <option key={doc._id} value={doc._id}>
                         {doc.title || "Untitled Document"}
@@ -1037,10 +920,8 @@ export default function VisualBuilder({
                     ))}
                   </select>
                 </div>
-
                 <div>
                   <label className="text-xs text-muted-foreground">Query</label>
-
                   <textarea
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
                     value={selectedStep.query || ""}
@@ -1051,10 +932,8 @@ export default function VisualBuilder({
                     }
                   />
                 </div>
-
                 <div>
                   <label className="text-xs text-muted-foreground">Top K</label>
-
                   <input
                     type="number"
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30 mt-1 bg-background"
@@ -1069,15 +948,10 @@ export default function VisualBuilder({
               </>
             )}
 
-            {/* CONDITION */}
             {selectedStep.type === "Condition" && (
               <>
-                {/* CONDITION TYPE */}
                 <div>
-                  <label className="text-xs text-muted-foreground">
-                    Condition Type
-                  </label>
-
+                  <label className="text-xs text-muted-foreground">Condition Type</label>
                   <select
                     className="w-full border rounded-lg px-3 py-2 mt-1 bg-background"
                     value={selectedStep.conditionType || ""}
@@ -1093,13 +967,8 @@ export default function VisualBuilder({
                     <option value="contains">Contains Text</option>
                   </select>
                 </div>
-
-                {/* OPERATOR */}
                 <div>
-                  <label className="text-xs text-muted-foreground">
-                    Operator
-                  </label>
-
+                  <label className="text-xs text-muted-foreground">Operator</label>
                   <select
                     className="w-full border rounded-lg px-3 py-2 mt-1 bg-background"
                     value={selectedStep.operator || ""}
@@ -1110,21 +979,18 @@ export default function VisualBuilder({
                     }
                   >
                     <option value="">Select operator</option>
-
                     {selectedStep.conditionType === "boolean" && (
                       <>
                         <option value="isTrue">Is True</option>
                         <option value="isFalse">Is False</option>
                       </>
                     )}
-
                     {selectedStep.conditionType === "sentiment" && (
                       <>
                         <option value="isPositive">Positive</option>
                         <option value="isNegative">Negative</option>
                       </>
                     )}
-
                     {selectedStep.conditionType === "contains" && (
                       <>
                         <option value="includes">Includes</option>
@@ -1133,14 +999,9 @@ export default function VisualBuilder({
                     )}
                   </select>
                 </div>
-
-                {/* VALUE (ONLY FOR CONTAINS) */}
                 {selectedStep.conditionType === "contains" && (
                   <div>
-                    <label className="text-xs text-muted-foreground">
-                      Value
-                    </label>
-
+                    <label className="text-xs text-muted-foreground">Value</label>
                     <input
                       className="w-full border rounded-lg px-3 py-2 mt-1 bg-background"
                       value={selectedStep.value || ""}
@@ -1155,16 +1016,10 @@ export default function VisualBuilder({
               </>
             )}
 
-            {/* SWITCH */}
             {selectedStep.type === "Switch" && (
               <>
-                <div className="text-xs text-muted-foreground">
-                  Connect edges to define cases.
-                </div>
-
-                <div className="text-xs opacity-70">
-                  Each connection = one case value
-                </div>
+                <div className="text-xs text-muted-foreground">Connect edges to define cases.</div>
+                <div className="text-xs opacity-70">Each connection = one case value</div>
               </>
             )}
           </div>
