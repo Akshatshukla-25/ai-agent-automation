@@ -175,7 +175,7 @@ graph TD
         direction TB
         AgentRunner["Agent Runner"]
         StepExecutor["Step Executor"]
-        ToolRegistry["Tool Registry"]
+        ToolRegistry["Tool Registry (Under Development)"]
         Scheduler["Scheduler"]
         Logger["Logger"]
     end

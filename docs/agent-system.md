@@ -14,7 +14,7 @@ The system supports multi-provider execution, allowing agents to be backed by di
 
 ## Model Routing
 
-Model routing enables dynamic selection of the specific model version based on the complexity of the workflow step. Simple deterministic tasks can be routed to faster, smaller models, while complex reasoning tasks are routed to high-parameter models. 
+Model routing dictates that workflows are executed using the specific provider and model explicitly configured on the assigned agent. This ensures predictable execution, allowing users to strictly control which foundation model is responsible for a given workflow based on their agent setup.
 
 ## Memory-Enabled Workflows
 
