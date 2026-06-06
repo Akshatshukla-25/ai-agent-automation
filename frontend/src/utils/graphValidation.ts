@@ -103,10 +103,14 @@ export const validateGraphIntegrity = (nodes: any[], edges: any[]): { isValid: b
   });
 
   (edges || []).forEach((edge) => {
-    if (nodeIds.has(edge.source)) {
+    if (!nodeIds.has(edge.source)) {
+      errors.push(`Orphaned Reference: Edge '${edge.id}' references a source node ID that does not exist.`);
+    } else {
       outDegree.set(edge.source, (outDegree.get(edge.source) || 0) + 1);
     }
-    if (nodeIds.has(edge.target)) {
+    if (!nodeIds.has(edge.target)) {
+      errors.push(`Orphaned Reference: Edge '${edge.id}' references a target node ID that does not exist.`);
+    } else {
       inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
     }
   });
