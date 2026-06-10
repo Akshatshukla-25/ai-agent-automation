@@ -2,6 +2,11 @@
 
 import { useEffect, useState, FormEvent, useCallback, memo, useMemo } from "react";
 import Link from "next/link";
+import {
+  useRouter,
+  useSearchParams,
+  usePathname,
+} from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { Badge } from "@/components/ui/badge";
@@ -368,8 +373,34 @@ export default function WorkflowsPage() {
 
   // ─── Filter State ───
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const statusFromUrl = searchParams.get("status");
+
+  const statusFilter =
+    statusFromUrl &&
+      STATUS_OPTIONS.includes(statusFromUrl)
+      ? statusFromUrl
+      : "all";
+    const handleStatusChange = (
+      status: string
+) => {
+      const params = new URLSearchParams(
+        searchParams.toString()
+  );
+
+      if (status === "all") {
+        params.delete("status");
+  }     else {
+        params.set("status", status);
+  }
+
+      router.replace(
+        `${pathname}?${params.toString()}`
+  );
+};
   const debouncedQuery = useDebounce(query, 300);
 
   const fetchAgents = useCallback(async () => {
@@ -509,10 +540,19 @@ export default function WorkflowsPage() {
   const hasActiveFilters = query || statusFilter !== "all" || sortBy !== "newest";
 
   function clearFilters() {
-    setQuery("");
-    setStatusFilter("all");
-    setSortBy("newest");
-  }
+  setQuery("");
+  setSortBy("newest");
+
+  const params = new URLSearchParams(
+    searchParams.toString()
+  );
+
+  params.delete("status");
+
+  router.replace(
+    `${pathname}?${params.toString()}`
+  );
+}
 
   return (
     <AuthGuard>
@@ -608,7 +648,9 @@ export default function WorkflowsPage() {
 
                   <select
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
+                    onChange={(e) =>
+                      handleStatusChange(e.target.value)
+                    }
                     className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 capitalize"
                   >
                     {STATUS_OPTIONS.map((s) => (
@@ -923,7 +965,7 @@ function DeleteWorkflowModal({
         <DialogHeader>
           <DialogTitle>Delete Workflow</DialogTitle>
           <DialogDescription className="text-foreground mt-4">
-            Are you sure you want to delete workflow <strong>"{workflow?.name}"</strong>? This action cannot be undone.
+          Are you sure you want to delete workflow <strong>&quot;{workflow?.name}&quot;</strong>? This action cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
