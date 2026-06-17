@@ -16,7 +16,7 @@ export type StepType =
   | "Join"
   | "Approval";
 
-export type ToolType = "email" | "file" | "browser";
+export type ToolType = 'email' | 'file' | 'browser';
 
 export interface WorkflowNode {
   id: string;
@@ -28,7 +28,7 @@ export interface WorkflowNode {
   };
 
   // Parallel Execution
-  failureStrategy?: "fail-fast" | "continue-on-error";
+  failureStrategy?: 'fail-fast' | 'continue-on-error';
 
   // LLM
   useMemory?: boolean;
@@ -37,7 +37,7 @@ export interface WorkflowNode {
 
   // HTTP
   url?: string;
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   body?: string;
 
   // Delay
@@ -72,7 +72,7 @@ export interface WorkflowNode {
   topK?: number;
 
   // Condition
-  conditionType?: "boolean" | "sentiment" | "contains" | string;
+  conditionType?: 'boolean' | 'sentiment' | 'contains' | string;
   operator?: string;
   value?: string;
   trueTarget?: string;
@@ -127,14 +127,14 @@ export interface BackendStep {
     x: number;
     y: number;
   };
-  
-  failureStrategy?: "fail-fast" | "continue-on-error";
-  
+
+  failureStrategy?: 'fail-fast' | 'continue-on-error';
+
   useMemory?: boolean;
   memoryTopK?: number;
   prompt?: string;
   url?: string;
-  method?: "GET" | "POST" | "PUT" | "DELETE" | string;
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | string;
   body?: string;
   seconds?: number;
   delay?: number;
@@ -175,7 +175,7 @@ export interface WorkflowEdge {
   id: string;
   source: string;
   target: string;
-  condition?: "true" | "false";
+  condition?: 'true' | 'false';
   caseValue?: string;
   label?: string;
   animated?: boolean;
@@ -191,6 +191,14 @@ export interface WorkflowMetadata {
   edges?: WorkflowEdge[];
 }
 
+export interface WorkflowApiSettings {
+  enabled: boolean;
+  endpointName: string;
+  authentication: boolean;
+  rateLimit: boolean;
+  responseStepId?: string;
+}
+
 export interface WorkflowPayload {
   _id: string;
   name: string;
@@ -199,6 +207,7 @@ export interface WorkflowPayload {
   agentId?: string;
   tasks?: (string | { _id: string })[];
   metadata?: WorkflowMetadata;
+  apiSettings?: WorkflowApiSettings;
   createdAt?: string;
   updatedAt?: string;
 }
