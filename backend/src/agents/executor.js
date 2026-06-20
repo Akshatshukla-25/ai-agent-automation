@@ -56,9 +56,19 @@ async function executeStep(step, context = {}, agent = null) {
       }
 
     } catch (err) {
-      const normalizedError = err instanceof ExecutionError 
-        ? err 
-        : new ExecutionError(err.message || 'Unknown execution error', 'UNKNOWN_ERROR', { rawName: err.name });
+      let normalizedError;
+
+      if (err instanceof ExecutionError) {
+        normalizedError = err;
+      } else if (err?.message && (err.message.toLowerCase().includes('timeout') || err.message.toLowerCase().includes('timed out'))) {
+        normalizedError = new TimeoutError(err.message, { configuredTimeoutMs: finalTimeoutMs });
+      } else {
+        normalizedError = new ExecutionError(
+          err?.message || 'Unknown execution error',
+          'UNKNOWN_ERROR',
+          { rawName: err?.name }
+        );
+      }
 
       const isTimeout = normalizedError instanceof TimeoutError;
 
