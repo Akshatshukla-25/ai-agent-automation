@@ -41,7 +41,7 @@ async function execute(step, context, agent, validatedStepId, timeoutMs) {
       ...config.options,
     });
 
-    if (llmRes?.text) {
+    if (llmRes?.text && !llmRes?.error) {
       await storeMemory(
         agent,
         JSON.stringify({
@@ -60,9 +60,10 @@ async function execute(step, context, agent, validatedStepId, timeoutMs) {
       stepId: validatedStepId,
       type: 'llm',
       input: prompt,
-      output: llmRes.text,
-      raw: llmRes.raw,
-      success: true,
+      output: llmRes?.error ? llmRes.error : llmRes?.text,
+      raw: llmRes?.raw,
+      error: llmRes?.error,
+      success: !llmRes?.error,
       metrics: memoryMetrics,
     });
   }
@@ -78,9 +79,10 @@ async function execute(step, context, agent, validatedStepId, timeoutMs) {
     stepId: validatedStepId,
     type: 'llm',
     input: prompt,
-    output: llmRes.text,
-    raw: llmRes.raw,
-    success: true,
+    output: llmRes?.text || llmRes?.error,
+    raw: llmRes?.raw,
+    error: llmRes?.error,
+    success: !llmRes?.error,
   });
 }
 
