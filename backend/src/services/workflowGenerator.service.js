@@ -2,13 +2,14 @@ const { runLLM } = require('../agents/llmAdapter');
 const { generatedWorkflowSchema } = require('../workflow/workflowGenerator.schema');
 
 const STEP_TYPE_GUIDE = `
+- delay: config { seconds (number, required) }
 - llm: config { prompt (required), useMemory?, memoryTopK? }
 - http: config { method (GET|POST|PUT|DELETE, required), url (required), body?, maxRetries?, backoffMultiplier? }
 - file: config { action (read|write|append|remove|list, required), path (required), content? }
 - email: config { to (required), subject (required), text?, html? }
 - browser: config { action (screenshot|evaluate, required), url (required), code? }
 - document_query: config { documentId (required), query (required), topK? }
-- condition: config { conditionType (contains|boolean, required), value? }. Must have exactly two outgoing edges: one with condition "true", one with condition "false".
+- condition: config { conditionType (contains|boolean, required), operator (==|!=|>|<|>=|<=|contains|startsWith, required), value? }. Must have exactly two outgoing edges: one with condition "true", one with condition "false".
 - switch: config {}. Routes based on the previous step's output text. Each outgoing edge needs a caseValue string to match against; at most one fallback edge may omit caseValue.
 `.trim();
 
@@ -18,7 +19,7 @@ Given a plain-English description, output ONLY a JSON object (no markdown fences
 
 Rules:
 - stepId values must be short, unique, lowercase, snake_case.
-- type must be one of: llm, http, file, email, browser, document_query, condition, switch.
+- type must be one of: delay, llm, http, file, email, browser, document_query, condition, switch.
 ${STEP_TYPE_GUIDE}
 - To reference a previous step's output inside a prompt or field, use the placeholder {{steps.<stepId>.output}}. Use {{input.<field>}} to reference the original task input.
 - Every step except the last in a chain must have at least one outgoing edge. The graph must be connected and acyclic.
