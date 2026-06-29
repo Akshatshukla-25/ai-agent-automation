@@ -9,7 +9,7 @@ const STEP_TYPE_GUIDE = `
 - email: config { to (required), subject (required), text?, html? }
 - browser: config { action (screenshot|evaluate, required), url (required), code? }
 - document_query: config { documentId (required), query (required), topK? }
-- condition: config { conditionType (contains|boolean, required), operator (==|!=|>|<|>=|<=|contains|startsWith, required), value? }. Must have exactly two outgoing edges: one with condition "true", one with condition "false".
+- condition: config { conditionType (contains|boolean, required), value? }. Must have exactly two outgoing edges: one with condition "true", one with condition "false".
 - switch: config {}. Routes based on the previous step's output text. Each outgoing edge needs a caseValue string to match against; at most one fallback edge may omit caseValue.
 `.trim();
 

@@ -501,12 +501,7 @@ export default function WorkflowBuilderPage() {
         let toolName = s.tool || '';
 
         const lowerType = String(s.type || '').toLowerCase();
-        if (lowerType === 'llm') finalType = 'LLM';
-        else if (lowerType === 'http') finalType = 'HTTP';
-        else if (lowerType === 'delay') finalType = 'Delay';
-        else if (lowerType === 'mcp') finalType = 'MCP';
-        else if (lowerType === 'document_query') finalType = 'Document';
-        else if (lowerType === 'condition') finalType = 'Condition';
+        if (lowerType === 'condition') finalType = 'Condition';
         else if (lowerType === 'switch') finalType = 'Switch';
         else if (['email', 'file', 'browser'].includes(lowerType)) {
           finalType = 'Tool';
