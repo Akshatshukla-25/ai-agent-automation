@@ -60,8 +60,14 @@ Do not include markdown formatting like \`\`\`json.`;
       stepId: validatedStepId,
       type: 'agent_call',
       input: inputPayload,
-      output: `Request dispatched asynchronously to ${agent?.name}.`,
-      success: true
+      output: 'Asynchronous agent delegation is not currently supported.',
+      success: false,
+      executedBy: {
+        agentId: agent?._id,
+        agentName: agent?.name,
+        provider: agent?.config?.provider,
+        model: agent?.config?.model
+      }
     });
   }
 
@@ -93,8 +99,7 @@ Do not include markdown formatting like \`\`\`json.`;
   let parsedOutput;
   try {
     let rawText = llmRes.text.trim();
-    if (rawText.startsWith('```json')) rawText = rawText.replace(/```json/g, '');
-    if (rawText.startsWith('```')) rawText = rawText.replace(/```/g, '');
+    rawText = rawText.replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '');
     parsedOutput = JSON.parse(rawText.trim());
   } catch (e) {
     parsedOutput = {
